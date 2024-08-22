@@ -3,7 +3,7 @@ from flask import Flask, request, abort, jsonify
 from flask_sqlalchemy import SQLAlchemy
 from flask_cors import CORS
 import random
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.orm import DeclarativeBase
 
 from models import Question, Category
@@ -117,7 +117,7 @@ def create_app(test_config=None, db=db):
         )
 
     """
-    @TODO:
+    @TODO - DONE:
     Create an endpoint to handle GET requests for questions,
     including pagination (every 10 questions).
     This endpoint should return a list of questions,
@@ -151,12 +151,38 @@ def create_app(test_config=None, db=db):
         )
 
     """
-    @TODO:
+    @TODO - DONE:
     Create an endpoint to DELETE question using a question ID.
 
     TEST: When you click the trash icon next to a question, the question will be removed.
     This removal will persist in the database and when you refresh the page.
     """
+
+    @app.route("/questions/<int:id>", methods=["DELETE"])
+    def delete_question(id):
+        try:
+            stmt_question_by_id = select(Question).where(Question.id == id)
+            selected_question = db.session.scalars(stmt_question_by_id).one_or_none()
+            if selected_question is None:
+                abort(404)
+
+            db.session.delete(selected_question)
+            db.session.commit()
+
+            return (
+                jsonify(
+                    {
+                        "success": True,
+                        "deleted": id,
+                    }
+                ),
+                200,
+            )
+        except Exception as e:
+            db.session.rollback()
+            abort(422)
+        finally:
+            db.session.close()
 
     """
     @TODO:
@@ -169,8 +195,68 @@ def create_app(test_config=None, db=db):
     of the questions list in the "List" tab.
     """
 
+    @app.route("/questions", methods=["POST"])
+    def submit_question():
+        body = request.get_json(silent=True)
+        question = body.get("question", None)
+        answer = body.get("answer", None)
+        difficulty = body.get("difficulty", None)
+        category = body.get("category", None)
+        search = body.get("searchTerm", None)
+        try:
+            if search:
+                stmt_search_question = (
+                    select(Question)
+                    .where(Question.question.icontains(search))
+                    .order_by(Question.id)
+                )
+                search_results = db.session.scalars(stmt_search_question).all()
+                formatted_questions = paginate_questions(request, search_results)
+                count_results = len(search_results)
+
+                return jsonify(
+                    {
+                        "success": True,
+                        "questions": formatted_questions,
+                        "total_questions": count_results,
+                        "current_category": "All",
+                    }
+                )
+            else:
+                if (
+                    (question is None)
+                    or (answer is None)
+                    or (difficulty is None)
+                    or (category is None)
+                ):
+                    abort(400)
+
+                new_question = Question(
+                    question=question,
+                    answer=answer,
+                    difficulty=difficulty,
+                    category=category,
+                )
+
+                db.session.add(new_question)
+                db.session.commit()
+
+                return (
+                    jsonify(
+                        {
+                            "success": True,
+                        }
+                    ),
+                    200,
+                )
+        except Exception as e:
+            db.session.rollback()
+            abort(422)
+        finally:
+            db.session.close()
+
     """
-    @TODO:
+    @TODO - DONE:
     Create a POST endpoint to get questions based on a search term.
     It should return any questions for whom the search term
     is a substring of the question.
