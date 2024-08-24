@@ -1,9 +1,8 @@
-import os
 from flask import Flask, request, abort, jsonify
 from flask_sqlalchemy import SQLAlchemy
 from flask_cors import CORS
-import random
-from sqlalchemy import delete, select
+from sqlalchemy import select
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import DeclarativeBase
 from sqlalchemy.sql.expression import func
 
@@ -124,6 +123,7 @@ def create_app(test_config=None, db=db):
 
         if len(formatted_questions) == 0:
             abort(404)
+
         return jsonify(
             {
                 "success": True,
@@ -154,9 +154,9 @@ def create_app(test_config=None, db=db):
                 ),
                 200,
             )
-        except Exception as e:
+        except SQLAlchemyError as e:
             db.session.rollback()
-            abort(422)
+            abort(500)
         finally:
             db.session.close()
 
@@ -230,9 +230,9 @@ def create_app(test_config=None, db=db):
                     ),
                     200,
                 )
-        except Exception as e:
+        except SQLAlchemyError as e:
             db.session.rollback()
-            abort(422)
+            abort(500)
         finally:
             db.session.close()
 
