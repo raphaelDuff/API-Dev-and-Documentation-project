@@ -112,6 +112,16 @@ def create_app(test_config=None, db=db):
         dict_categories = {str(category.id): category.type for category in categories}
         questions = db.session.scalars(stmt_select_all_questions).all()
         formatted_questions = paginate_questions(request, questions)
+
+        first_question = db.session.scalars(stmt_select_all_questions).first()
+        stmt_current_category = select(Category.type).where(
+            Category.id == int(first_question.category)
+        )
+        selected_category = db.session.scalars(stmt_current_category).one_or_none()
+
+        if selected_category is None:
+            abort(422)
+
         if len(formatted_questions) == 0:
             abort(404)
         return jsonify(
@@ -120,7 +130,7 @@ def create_app(test_config=None, db=db):
                 "questions": formatted_questions,
                 "total_questions": len(questions),
                 "categories": dict_categories,
-                "current_category": "All",
+                "current_category": selected_category,
             }
         )
 
@@ -165,16 +175,32 @@ def create_app(test_config=None, db=db):
                     .where(Question.question.icontains(search))
                     .order_by(Question.id)
                 )
+
                 search_results = db.session.scalars(stmt_search_question).all()
                 formatted_questions = paginate_questions(request, search_results)
                 count_results = len(search_results)
+
+                if count_results > 0:
+                    first_question = db.session.scalars(stmt_search_question).first()
+                    stmt_current_category = select(Category.type).where(
+                        Category.id == int(first_question.category)
+                    )
+                    selected_category = db.session.scalars(
+                        stmt_current_category
+                    ).one_or_none()
+
+                    if selected_category is None:
+                        abort(422)
+
+                else:
+                    selected_category = ""
 
                 return jsonify(
                     {
                         "success": True,
                         "questions": formatted_questions,
                         "total_questions": count_results,
-                        "current_category": "All",
+                        "current_category": selected_category,
                     }
                 )
             else:
@@ -215,7 +241,7 @@ def create_app(test_config=None, db=db):
         stmt_category_type = select(Category.type).where(Category.id == id)
         selected_category = db.session.scalars(stmt_category_type).one_or_none()
         if selected_category is None:
-            abort(404)
+            abort(400)
 
         stmt_select_all_questions = (
             select(Question).where(Question.category == str(id)).order_by(Question.id)
@@ -238,9 +264,8 @@ def create_app(test_config=None, db=db):
         body = request.get_json(silent=True)
         previous_questions = body.get("previous_questions", None)
         category = body.get("quiz_category", None)
-        print("$$$$$$$$$$$ Category:", category)
         if category is None:
-            abort(422)
+            abort(400)
 
         if category["id"] == 0:
             stmt_get_random_question = (
