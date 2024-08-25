@@ -285,13 +285,17 @@ def create_app(test_config=None, db=db):
             )
 
         random_question = db.session.scalars(stmt_get_random_question).first()
-        ramdom_question_formatted = random_question.format()
+
+        if random_question is not None:
+            random_question = random_question.format()
+        else:
+            random_question = ""
 
         return (
             jsonify(
                 {
                     "success": True,
-                    "question": ramdom_question_formatted,
+                    "question": random_question,
                 }
             ),
             200,
