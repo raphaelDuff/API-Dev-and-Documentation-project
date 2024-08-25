@@ -264,7 +264,7 @@ def create_app(test_config=None, db=db):
         body = request.get_json(silent=True)
         previous_questions = body.get("previous_questions", None)
         category = body.get("quiz_category", None)
-        if category is None:
+        if (category is None) or (previous_questions is None):
             abort(400)
 
         if category["id"] == 0:

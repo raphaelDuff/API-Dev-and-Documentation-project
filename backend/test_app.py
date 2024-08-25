@@ -64,7 +64,6 @@ class TriviaTestCase(unittest.TestCase):
         """Test Home - verify if the paginated Questions page is working"""
         res = self.client.get("/questions")
         data = json.loads(res.data)
-
         self.assertEqual(res.status_code, 200)
         self.assertEqual(data["success"], True)
         self.assertTrue(data["total_questions"])
@@ -77,20 +76,20 @@ class TriviaTestCase(unittest.TestCase):
         self.assertEqual(data["success"], False)
         self.assertEqual(data["message"], "resource not found")
 
-    # def test_delete_book(self):
-    #     res = self.client.delete("/questions/2")
-    #     data = json.loads(res.data)
+    def test_delete_book(self):
+        res = self.client.delete("/questions/2")
+        data = json.loads(res.data)
+        stmt_select_question_by_id = select(Question).where(Question.id == 2)
 
-    #     stmt_select_question_by_id = select(Question).where(Question.id == 2)
-    #     with self.app.app_context():
-    #         selected_question = db.session.scalars(
-    #             stmt_select_question_by_id
-    #         ).one_or_none()
+        with self.app.app_context():
+            selected_question = db.session.scalars(
+                stmt_select_question_by_id
+            ).one_or_none()
 
-    #     self.assertEqual(res.status_code, 200)
-    #     self.assertEqual(data["success"], True)
-    #     self.assertEqual(data["deleted"], 2)
-    #     self.assertEqual(selected_question, None)
+        self.assertEqual(res.status_code, 200)
+        self.assertEqual(data["success"], True)
+        self.assertEqual(data["deleted"], 2)
+        self.assertEqual(selected_question, None)
 
     def test_404_if_question_does_not_exist(self):
         res = self.client.delete("/questions/1000")
@@ -116,19 +115,56 @@ class TriviaTestCase(unittest.TestCase):
         self.assertEqual(data["total_questions"], 0)
         self.assertEqual(data["current_category"], "")
 
+    def test_priorize_search(self):
+        """If the new question and the search were provided, the code should use only search term"""
+        res = self.client.post(
+            "/questions",
+            json={
+                "question": "Who is the best brazilian AWPer of all time?",
+                "answer": "_duff_",
+                "difficulty": 5,
+                "category": "6",
+                "searchTerm": "Lestat",
+            },
+        )
+        data = json.loads(res.data)
+
+        stmt_select_question = select(Question).where(Question.answer == "_duff_")
+
+        with self.app.app_context():
+            selected_questions = db.session.scalars(stmt_select_question).one_or_none()
+
+        self.assertEqual(selected_questions, None)
+        self.assertEqual(res.status_code, 200)
+        self.assertEqual(data["success"], True)
+        self.assertTrue(data["questions"])
+        self.assertGreaterEqual(data["total_questions"], 1)
+        self.assertEqual(data["current_category"], "Entertainment")
+
     def test_create_new_question(self):
         res = self.client.post("/questions", json=self.new_question)
         data = json.loads(res.data)
 
-        stmt_select_question_by_id = select(Question).where(
+        stmt_select_question = select(Question).where(
             Question.answer == "Nabucodonosor"
         )
         with self.app.app_context():
-            selected_questions = db.session.scalars(stmt_select_question_by_id).all()
+            selected_questions = db.session.scalars(stmt_select_question).all()
 
         self.assertEqual(res.status_code, 200)
         self.assertEqual(data["success"], True)
         self.assertGreaterEqual(len(selected_questions), 1)
+
+    def test_400_create_new_question(self):
+        """Fail due to missing Question attribute - No answer provided"""
+        res = self.client.post(
+            "/questions",
+            json={"question": "Who is the best brazilian AWPer of all time?"},
+        )
+        data = json.loads(res.data)
+        self.assertEqual(res.status_code, 400)
+        self.assertEqual(data["success"], False)
+        self.assertEqual(data["message"], "bad request")
 
     def test_quiz_start(self):
         res = self.client.post(
@@ -142,6 +178,22 @@ class TriviaTestCase(unittest.TestCase):
         self.assertEqual(res.status_code, 200)
         self.assertEqual(data["success"], True)
         self.assertTrue(data["question"])
+
+    def test_400_quiz_no_previous_question(self):
+        res = self.client.post(
+            "/quizzes", json={"quiz_category": {"type": "Geography", "id": "3"}}
+        )
+        data = json.loads(res.data)
+        self.assertEqual(res.status_code, 400)
+        self.assertEqual(data["success"], False)
+        self.assertEqual(data["message"], "bad request")
+
+    def test_400_quiz_no_quiz_category(self):
+        res = self.client.post("/quizzes", json={"previous_questions": []})
+        data = json.loads(res.data)
+        self.assertEqual(res.status_code, 400)
+        self.assertEqual(data["success"], False)
+        self.assertEqual(data["message"], "bad request")
 
 
 if __name__ == "__main__":
